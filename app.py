@@ -3,7 +3,9 @@
 ============================================================
  CENTRO DE CÓMPUTO GEO-ANALÍTICO  —  ANTIOQUIA & COLOMBIA
 ============================================================
-Dos pantallas holográficas animadas en Streamlit:
+Dos pantallas holográficas animadas en Streamlit, flotando en 3D
+sobre el fondo de la SALA DE CÓMPUTO (oficina con ventanas al
+atardecer, skyline, escritorio y persona trabajando):
 
   • Pantalla izquierda  → Departamento de Antioquia (tema cian)
   • Pantalla derecha   → República de Colombia      (tema dorado)
@@ -31,7 +33,10 @@ Los datos son 100 % SINTÉTICOS (generados con `random`).
  1. Crea un repositorio en GitHub con estos archivos:
         app.py
         requirements.txt        (contenido: streamlit)
-    (opcional: README.md)
+        sala.jpg                (opcional: tu imagen de la sala)
+    Si subes tu imagen como "sala.jpg" junto a app.py, la app la usa
+    automáticamente como fondo de la sala de cómputo. Si no existe,
+    la sala se dibuja sola con SVG (atardecer, skyline, escritorio).
  2. Sube el código:
         git init
         git add .
@@ -51,6 +56,8 @@ Los datos son 100 % SINTÉTICOS (generados con `random`).
  - No requiere pandas ni numpy: solo Streamlit + stdlib.
 """
 
+import base64
+import os
 import random
 import time
 
@@ -175,7 +182,8 @@ def formulas_col(filas, idx):
 
 CSS = """
 <style>
-.stApp { background: radial-gradient(1100px 600px at 25% -10%, #0c1c31 0%, #04070f 58%, #01030a 100%); }
+.stApp { position: relative; z-index: 0; background: radial-gradient(1100px 600px at 25% -10%, #0c1c31 0%, #04070f 58%, #01030a 100%); }
+section[data-testid="stAppViewContainer"], .main { background: transparent !important; }
 #MainMenu, footer, header { visibility: hidden; }
 .main-header { text-align: center; padding: 4px 0 2px; }
 .main-header h1 {
@@ -191,16 +199,37 @@ CSS = """
 }
 @keyframes parpadeo { 0%,100% { opacity: 1; } 50% { opacity: .2; } }
 
-/* ─── Pantallas holográficas ─── */
-.pantalla { border-radius: 16px; padding: 12px 14px 12px; margin-bottom: 12px; }
+/* ─── Sala de cómputo (fondo) ─── */
+.fondo-sala { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.fondo-sala svg, .fondo-sala img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fondo-sala::after {
+  content: ""; position: fixed; inset: 0;
+  background: linear-gradient(rgba(2,6,16,.42), rgba(2,6,16,.74));
+}
+.block-container { background: transparent !important; padding-top: 1.2rem !important; }
+section[data-testid="stSidebar"] { background: rgba(4,8,18,.88) !important; border-right: 1px solid rgba(56,189,248,.14); }
+.bwin { animation: bwinBlink 4.5s ease-in-out infinite; }
+@keyframes bwinBlink { 0%,100% { opacity: .85; } 50% { opacity: .12; } }
+
+/* ─── Hologramas flotantes (inclinados en 3D) ─── */
+.holo-float { animation: flotar 7s ease-in-out infinite; }
+.holo-float.der { animation-delay: .9s; }
+@keyframes flotar { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-11px); } }
+.holo-flotante {
+  border-radius: 16px; padding: 12px 14px; margin-bottom: 12px;
+  transform: perspective(1300px) rotateY(9deg);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 18px 42px rgba(0,0,0,.55);
+}
+.holo-float.der .holo-flotante { transform: perspective(1300px) rotateY(-9deg); }
 .tema-cian {
   border: 1px solid rgba(56,189,248,.45);
-  background: linear-gradient(165deg, rgba(14,42,72,.78), rgba(3,10,22,.94));
+  background: linear-gradient(165deg, rgba(14,42,72,.64), rgba(3,10,22,.85));
   animation: brilloCian 3.2s ease-in-out infinite;
 }
 .tema-oro {
   border: 1px solid rgba(251,191,36,.45);
-  background: linear-gradient(165deg, rgba(59,44,12,.78), rgba(22,14,3,.94));
+  background: linear-gradient(165deg, rgba(59,44,12,.64), rgba(22,14,3,.85));
   animation: brilloOro 3.2s ease-in-out infinite;
 }
 @keyframes brilloCian {
@@ -219,7 +248,7 @@ CSS = """
 .titulo-pantalla .der { margin-left: auto; opacity: .65; font-weight: 400; }
 
 /* ─── Mapas SVG ─── */
-.marco-mapa { border: 1px dashed rgba(148,163,184,.18); border-radius: 12px; overflow: hidden; }
+.marco-mapa { border: 1px dashed rgba(148,163,184,.18); border-radius: 12px; overflow: hidden; background: rgba(2,8,18,.40); }
 .marco-mapa svg { display: block; width: 100%; height: auto; }
 .nodo { animation: nodoBlink 2.6s ease-in-out infinite; }
 @keyframes nodoBlink { 0%,100% { opacity: .12; } 50% { opacity: 1; } }
@@ -231,7 +260,7 @@ CSS = """
 .tcap  { fill: #ffffff; font: 700 10px Consolas, monospace; letter-spacing: 1px; }
 
 /* ─── Hoja Excel viva ─── */
-.hoja { border: 1px solid rgba(148,163,184,.16); border-radius: 10px; padding: 8px; background: rgba(1,5,14,.62); }
+.hoja { border: 1px solid rgba(120,170,230,.22); border-radius: 10px; padding: 8px; background: rgba(3,9,20,.68); backdrop-filter: blur(5px); box-shadow: 0 10px 30px rgba(0,0,0,.45); }
 .fx-bar {
   display: flex; align-items: center; gap: 8px; font: 12px Consolas, monospace;
   background: #0d1420; border: 1px solid #233247; border-radius: 6px;
@@ -274,6 +303,129 @@ ENCABEZADO = """
   <p><span class="dot-live"></span>PROCESAMIENTO CONTINUO · HOJAS DE CÁLCULO VIVAS · DATOS 100 % SINTÉTICOS</p>
 </div>
 """
+
+
+# ============================================================
+# 3.5 SALA DE CÓMPUTO (FONDO)
+# ============================================================
+
+def sala_svg():
+    """Dibuja la sala de cómputo: ventanas con atardecer, skyline con
+    ventanitas que parpadean, escritorio con persona y piso con rejilla."""
+    rng = random.Random(42)
+    edificios, ventanitas = [], []
+    x = 70
+    while x < 928:
+        if 470 < x < 548:            # respeta el mullión entre ventanas
+            x = 548
+            continue
+        w = rng.randint(34, 72)
+        h = rng.randint(80, 300)
+        if x + w > 472:
+            w = 472 - x              # no invadir el mullión
+        if x + w > 930:
+            w = 930 - x
+        if w < 14:
+            x += 20
+            continue
+        edificios.append(f'<rect x="{x}" y="{492 - h}" width="{w}" height="{h}" fill="#0b1024"/>')
+        wx = x + 7
+        while wx < x + w - 8:
+            wy = 492 - h + 10
+            while wy < 478:
+                if rng.random() < .45:
+                    ventanitas.append(
+                        f'<rect x="{wx}" y="{wy}" width="5" height="8" fill="#ffd97d" '
+                        f'class="bwin" style="animation-delay:{rng.uniform(0, 4.5):.1f}s"/>')
+                wy += 18
+            wx += 14
+        x += w + rng.randint(8, 22)
+
+    rejilla = []
+    for gx in range(0, 1441, 120):
+        rejilla.append(
+            f'<line x1="{gx}" y1="810" x2="{720 + (gx - 720) * 0.12:.0f}" y2="566" '
+            f'stroke="#38bdf8" stroke-opacity=".08"/>')
+    for gy in [572, 586, 604, 628, 658, 695, 740, 792]:
+        rejilla.append(f'<line x1="0" y1="{gy}" x2="1440" y2="{gy}" stroke="#38bdf8" stroke-opacity=".06"/>')
+
+    ed = "".join(edificios)
+    vt = "".join(ventanitas)
+    rj = "".join(rejilla)
+    return f'''
+<div class="fondo-sala">
+<svg viewBox="0 0 1440 810" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cielo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#131c40"/>
+      <stop offset=".45" stop-color="#5b3a78"/>
+      <stop offset=".78" stop-color="#c96a52"/>
+      <stop offset="1" stop-color="#f2a65e"/>
+    </linearGradient>
+    <radialGradient id="sol" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#ffd9a0" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#ffd9a0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="piso" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a1222"/>
+      <stop offset="1" stop-color="#04070e"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1440" height="810" fill="#04070e"/>
+
+  <!-- ventanas con atardecer -->
+  <rect x="58" y="46" width="420" height="482" fill="url(#cielo)"/>
+  <rect x="510" y="46" width="420" height="482" fill="url(#cielo)" opacity=".97"/>
+  <circle cx="370" cy="440" r="95" fill="url(#sol)"/>
+  <circle cx="370" cy="440" r="24" fill="#ffe9c4" opacity=".92"/>
+  {ed}{vt}
+
+  <!-- marcos de las ventanas -->
+  <g fill="#0d1420">
+    <rect x="46" y="34" width="896" height="12"/>
+    <rect x="46" y="528" width="896" height="12"/>
+    <rect x="46" y="34" width="12" height="506"/>
+    <rect x="930" y="34" width="12" height="506"/>
+    <rect x="478" y="46" width="32" height="482"/>
+    <rect x="58" y="272" width="420" height="8"/>
+    <rect x="510" y="272" width="420" height="8"/>
+  </g>
+
+  <!-- interior y piso -->
+  <rect y="540" width="1440" height="270" fill="url(#piso)"/>
+  {rj}
+
+  <!-- escritorio con persona (silueta desde atrás) -->
+  <ellipse cx="1060" cy="650" rx="330" ry="150" fill="#0d1426" opacity=".55"/>
+  <rect x="920" y="608" width="280" height="14" rx="7" fill="#070b15"/>
+  <rect x="944" y="622" width="12" height="118" fill="#070b15"/>
+  <rect x="1164" y="622" width="12" height="118" fill="#070b15"/>
+  <rect x="990" y="512" width="104" height="64" rx="6" fill="#070b15"/>
+  <rect x="997" y="519" width="90" height="50" rx="3" fill="#7dd3fc" opacity=".22"/>
+  <rect x="1034" y="576" width="16" height="32" fill="#070b15"/>
+  <circle cx="1042" cy="482" r="29" fill="#05080f"/>
+  <path d="M986,610 Q1042,510 1098,610 Z" fill="#05080f"/>
+
+  <!-- reflejos de los hologramas en el piso -->
+  <ellipse cx="400" cy="720" rx="280" ry="42" fill="#38bdf8" opacity=".07"/>
+  <ellipse cx="1040" cy="720" rx="280" ry="42" fill="#fbbf24" opacity=".07"/>
+</svg>
+</div>'''
+
+
+def fondo_sala():
+    """Devuelve el HTML del fondo de la sala de cómputo.
+    Si existe una imagen propia (sala.jpg / sala.jpeg / sala.png) junto a
+    app.py, se usa esa fotografía como fondo; si no, se dibuja la sala con SVG."""
+    for nombre in ("sala.jpg", "sala.jpeg", "sala.png"):
+        if os.path.exists(nombre):
+            with open(nombre, "rb") as fh:
+                datos = base64.b64encode(fh.read()).decode()
+            mime = "image/png" if nombre.endswith("png") else "image/jpeg"
+            return (f'<div class="fondo-sala">'
+                    f'<img src="data:{mime};base64,{datos}" alt="Sala de cómputo"/></div>')
+    return sala_svg()
 
 
 # ============================================================
@@ -433,6 +585,7 @@ def main():
         layout="wide",
     )
     st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(fondo_sala(), unsafe_allow_html=True)
 
     with st.sidebar:
         st.header("⚙️ Parámetros")
@@ -441,6 +594,8 @@ def main():
         st.caption(
             "ℹ️ Presiona **ESC** (o ⏹ del menú de Streamlit) para pausar "
             "la animación y ajustar estos parámetros.\n\n"
+            "🖼️ Coloca tu imagen como `sala.jpg` junto a app.py para usarla "
+            "como fondo de la sala (si no existe, la sala se dibuja sola).\n\n"
             "🎲 Todos los datos son sintéticos."
         )
 
@@ -448,19 +603,21 @@ def main():
 
     col_izq, col_der = st.columns(2, gap="medium")
 
-    # Pantallas estáticas (mapas): sus animaciones CSS corren sin parar
+    # Hologramas flotantes (mapas): sus animaciones CSS corren sin parar
     col_izq.markdown(
-        f"""<div class="pantalla tema-cian">
+        f"""<div class="holo-float">
+        <div class="holo-flotante tema-cian">
         <div class="titulo-pantalla"><span class="dot-live"></span>EN VIVO · Hoja: ANTIOQUIA.xlsx
         <span class="der">MATRIZ {len(MUNICIPIOS)}×5</span></div>
-        {mapa_antioquia()}</div>""",
+        {mapa_antioquia()}</div></div>""",
         unsafe_allow_html=True,
     )
     col_der.markdown(
-        f"""<div class="pantalla tema-oro">
+        f"""<div class="holo-float der">
+        <div class="holo-flotante tema-oro">
         <div class="titulo-pantalla"><span class="dot-live"></span>EN VIVO · Hoja: COLOMBIA.xlsx
         <span class="der">MATRIZ {len(DEPARTAMENTOS)}×5</span></div>
-        {mapa_colombia()}</div>""",
+        {mapa_colombia()}</div></div>""",
         unsafe_allow_html=True,
     )
 
@@ -508,3 +665,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
