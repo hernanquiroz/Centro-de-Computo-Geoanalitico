@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 ============================================================
  CENTRO DE CÓMPUTO GEO-ANALÍTICO  —  ANTIOQUIA & COLOMBIA
