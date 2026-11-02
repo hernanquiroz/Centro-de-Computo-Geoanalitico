@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 ============================================================
  CENTRO DE CÓMPUTO GEO-ANALÍTICO  —  ANTIOQUIA & COLOMBIA
@@ -198,17 +199,9 @@ section[data-testid="stAppViewContainer"], .main { background: transparent !impo
 }
 @keyframes parpadeo { 0%,100% { opacity: 1; } 50% { opacity: .2; } }
 
-/* ─── Sala de cómputo (fondo) ─── */
-.fondo-sala { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.fondo-sala svg, .fondo-sala img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.fondo-sala::after {
-  content: ""; position: fixed; inset: 0;
-  background: linear-gradient(rgba(2,6,16,.42), rgba(2,6,16,.74));
-}
+/* ─── Sala de cómputo: el fondo lo inyecta fondo_sala() en .stApp::before ─── */
 .block-container { background: transparent !important; padding-top: 1.2rem !important; }
 section[data-testid="stSidebar"] { background: rgba(4,8,18,.88) !important; border-right: 1px solid rgba(56,189,248,.14); }
-.bwin { animation: bwinBlink 4.5s ease-in-out infinite; }
-@keyframes bwinBlink { 0%,100% { opacity: .85; } 50% { opacity: .12; } }
 
 /* ─── Hologramas flotantes (inclinados en 3D) ─── */
 .holo-float { animation: flotar 7s ease-in-out infinite; }
@@ -351,9 +344,13 @@ def sala_svg():
     ed = "".join(edificios)
     vt = "".join(ventanitas)
     rj = "".join(rejilla)
+    # Las ventanitas del skyline parpadean: el <style> va DENTRO del SVG
+    # porque como imagen de fondo el SVG no ve el CSS de la página.
+    estilo = ('<style>.bwin{animation:bwinBlink 4.5s ease-in-out infinite}'
+              '@keyframes bwinBlink{0%,100%{opacity:.85}50%{opacity:.12}}</style>')
     return f'''
-<div class="fondo-sala">
 <svg viewBox="0 0 1440 810" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+  {estilo}
   <defs>
     <linearGradient id="cielo" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#131c40"/>
@@ -409,22 +406,43 @@ def sala_svg():
   <!-- reflejos de los hologramas en el piso -->
   <ellipse cx="400" cy="720" rx="280" ry="42" fill="#38bdf8" opacity=".07"/>
   <ellipse cx="1040" cy="720" rx="280" ry="42" fill="#fbbf24" opacity=".07"/>
-</svg>
-</div>'''
+</svg>'''
 
 
 def fondo_sala():
-    """Devuelve el HTML del fondo de la sala de cómputo.
-    Si existe una imagen propia (sala.jpg / sala.jpeg / sala.png) junto a
-    app.py, se usa esa fotografía como fondo; si no, se dibuja la sala con SVG."""
+    """Devuelve un bloque <style> que pone la sala de cómputo como capa de
+    fondo de la app (.stApp::before), SIEMPRE por debajo del contenido.
+    Si existe sala.jpg / sala.jpeg / sala.png junto a app.py, se usa esa
+    fotografía; si no, se dibuja la sala con SVG. Incluye un lento efecto
+    de cámara (zoom Ken Burns) para que la sala se sienta viva."""
+    url = None
     for nombre in ("sala.jpg", "sala.jpeg", "sala.png"):
         if os.path.exists(nombre):
             with open(nombre, "rb") as fh:
-                datos = base64.b64encode(fh.read()).decode()
+                datos = base64.b64encode(fh.read()).decode("utf-8")
             mime = "image/png" if nombre.endswith("png") else "image/jpeg"
-            return (f'<div class="fondo-sala">'
-                    f'<img src="data:{mime};base64,{datos}" alt="Sala de cómputo"/></div>')
-    return sala_svg()
+            url = f"data:{mime};base64,{datos}"
+            break
+    if url is None:
+        svg = sala_svg().encode("utf-8")
+        url = "data:image/svg+xml;base64," + base64.b64encode(svg).decode("utf-8")
+    return f"""
+<style>
+.stApp::before {{
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background-image:
+    linear-gradient(rgba(2,6,16,.50), rgba(2,6,16,.75)),
+    url("{url}");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  animation: kenburns 45s ease-in-out infinite alternate;
+}}
+@keyframes kenburns {{
+  0%   {{ transform: scale(1) translate(0, 0); }}
+  100% {{ transform: scale(1.09) translate(-1.2%, 1%); }}
+}}
+</style>"""
 
 
 # ============================================================
@@ -664,4 +682,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
